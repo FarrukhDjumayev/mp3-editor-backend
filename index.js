@@ -6,41 +6,44 @@ import path from "path";
 import NodeID3 from "node-id3";
 import ffmpeg from "fluent-ffmpeg";
 
-// ✅ Render va Linux friendly, Windows yo‘lini olib tashlash
-// Agar lokal Windows’da ishlatmoqchi bo‘lsang, path qo‘shib olasan
-// ffmpeg.setFfmpegPath("C:\\Users\\farru\\Downloads\\ffmpeg-8.0-essentials_build\\ffmpeg.exe");
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// -------------------- CORS sozlash --------------------
+// ✅ FFMPEG path — Windows uchun lokal sozlash
+if (process.platform === "win32") {
+  ffmpeg.setFfmpegPath("C:\\Users\\farru\\Downloads\\ffmpeg-8.0-essentials_build\\ffmpeg.exe");
+}
+
+// -------------------- CORS --------------------
 app.use(cors({
   origin: [
-    "https://farrukh-mp3-editor.vercel.app", // Frontend Vercel URL
-    "http://localhost:3000"                    // Local frontend
-  ]
+    "https://farrukh-mp3-editor.vercel.app",
+    "http://localhost:3000",
+    /\.t\.me$/, // Telegram Mini App
+  ],
+  methods: ["GET", "POST"],
+  credentials: true,
 }));
-// -------------------------------------------------------
 
-// JSON parsing
 app.use(express.json());
 
-// Upload papkasini tekshir va yarat
+// -------------------- Upload sozlash --------------------
 const uploadDir = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-// Multer sozlamalari: audio va cover
-const upload = multer({ dest: uploadDir });
+const upload = multer({
+  dest: uploadDir,
+  limits: {
+    fileSize: 20 * 1024 * 1024, // 20 MB
+  },
+});
 
-// POST /api/edit
+// -------------------- API Route --------------------
 app.post("/api/edit", upload.fields([
   { name: "audio", maxCount: 1 },
   { name: "cover", maxCount: 1 },
 ]), async (req, res) => {
   try {
-    console.log("📂 Request files:", req.files);
-    console.log("📦 Request body:", req.body);
-
     const audioFile = req.files["audio"]?.[0];
     const coverFile = req.files["cover"]?.[0];
 
@@ -50,7 +53,7 @@ app.post("/api/edit", upload.fields([
     const inputPath = path.resolve(audioFile.path);
     const outputPath = path.resolve(uploadDir, `edited-${Date.now()}.mp3`);
 
-    // FFMPEG bilan remux (Linux friendly)
+    // MP3 faylni qayta ishlash
     await new Promise((resolve, reject) => {
       ffmpeg(inputPath)
         .audioCodec("libmp3lame")
@@ -60,31 +63,34 @@ app.post("/api/edit", upload.fields([
         .on("error", (err) => reject(err));
     });
 
-    // ID3 tag qo‘shish
+    // ID3 tag qo'shish
     const tags = {
       title: title || "Untitled",
       artist: artist || "Unknown Artist",
     };
+    if (coverFile) tags.APIC = coverFile.path;
 
-    if (coverFile) {
-      tags.APIC = coverFile.path; // Cover rasmni qo‘shish
-    }
+    NodeID3.update(tags, outputPath);
 
-    const success = NodeID3.update(tags, outputPath);
-    console.log("🟢 Tag yozildi:", success);
+    // Telegram Mini App uchun stream orqali yuborish
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Disposition", "attachment; filename=edited.mp3");
 
-    // Faylni clientga jo‘natish
-    res.download(outputPath, "edited.mp3", () => {
-      fs.unlinkSync(inputPath);
-      if (coverFile) fs.unlinkSync(coverFile.path);
-      fs.unlinkSync(outputPath);
+    fs.createReadStream(outputPath).pipe(res).on("finish", () => {
+      try {
+        if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+        if (coverFile && fs.existsSync(coverFile.path)) fs.unlinkSync(coverFile.path);
+        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+      } catch (cleanupError) {
+        console.error("🧹 Fayl tozalashda xatolik:", cleanupError);
+      }
     });
 
   } catch (err) {
     console.error("🔥 Backend xatolik:", err);
-    res.status(500).json({ error: err && err.message ? err.message : String(err) });
+    res.status(500).json({ error: err.message || String(err) });
   }
 });
 
-// Serverni ishga tushurish
+// -------------------- Server --------------------
 app.listen(PORT, () => console.log(`✅ Backend http://localhost:${PORT} da ishlamoqda`));
