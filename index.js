@@ -6,17 +6,17 @@ import path from "path";
 import NodeID3 from "node-id3";
 import ffmpeg from "fluent-ffmpeg";
 
-// Windows: FFmpeg exe path ni qo‘shish
-ffmpeg.setFfmpegPath("C:\\Users\\farru\\Downloads\\ffmpeg-8.0-essentials_build\\ffmpeg-8.0-essentials_build\\bin\\ffmpeg.exe");
+// ✅ Render va Linux friendly, Windows yo‘lini olib tashlash
+// Agar lokal Windows’da ishlatmoqchi bo‘lsang, path qo‘shib olasan
+// ffmpeg.setFfmpegPath("C:\\Users\\farru\\Downloads\\ffmpeg-8.0-essentials_build\\ffmpeg.exe");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // -------------------- CORS sozlash --------------------
-// Frontend URL va local testing URL ruxsat beriladi
 app.use(cors({
   origin: [
-    "https://farrukh-mp3-editor.vercel.app/", // Frontend Vercel URL
+    "https://farrukh-mp3-editor.vercel.app", // Frontend Vercel URL
     "http://localhost:3000"                    // Local frontend
   ]
 }));
@@ -50,7 +50,7 @@ app.post("/api/edit", upload.fields([
     const inputPath = path.resolve(audioFile.path);
     const outputPath = path.resolve(uploadDir, `edited-${Date.now()}.mp3`);
 
-    // FFMPEG bilan remux (Windows friendly)
+    // FFMPEG bilan remux (Linux friendly)
     await new Promise((resolve, reject) => {
       ffmpeg(inputPath)
         .audioCodec("libmp3lame")
@@ -82,7 +82,7 @@ app.post("/api/edit", upload.fields([
 
   } catch (err) {
     console.error("🔥 Backend xatolik:", err);
-    res.status(500).json({ error: err.message, stack: err.stack });
+    res.status(500).json({ error: err && err.message ? err.message : String(err) });
   }
 });
 
