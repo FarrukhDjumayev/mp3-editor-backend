@@ -10,10 +10,19 @@ import ffmpeg from "fluent-ffmpeg";
 ffmpeg.setFfmpegPath("C:\\Users\\farru\\Downloads\\ffmpeg-8.0-essentials_build\\ffmpeg-8.0-essentials_build\\bin\\ffmpeg.exe");
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 
-// Middlewares
-app.use(cors());
+// -------------------- CORS sozlash --------------------
+// Frontend URL va local testing URL ruxsat beriladi
+app.use(cors({
+  origin: [
+    "https://farrukh-mp3-editor.vercel.app/", // Frontend Vercel URL
+    "http://localhost:3000"                    // Local frontend
+  ]
+}));
+// -------------------------------------------------------
+
+// JSON parsing
 app.use(express.json());
 
 // Upload papkasini tekshir va yarat
@@ -77,4 +86,5 @@ app.post("/api/edit", upload.fields([
   }
 });
 
+// Serverni ishga tushurish
 app.listen(PORT, () => console.log(`✅ Backend http://localhost:${PORT} da ishlamoqda`));
