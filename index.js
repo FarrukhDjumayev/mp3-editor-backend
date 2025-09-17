@@ -129,9 +129,14 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 // -------------------- CORS --------------------
 app.use(cors({
   origin: [
+<<<<<<< HEAD
     "https://farrukh-mp3-editor.vercel.app", // Sizning frontend Vercel URL
     "http://localhost:3000",                 // Localhost uchun
     /\.t\.me$/,                              // Telegram Mini App uchun
+=======
+    "https://your-mini-app.vercel.app",
+    "http://localhost:3000",
+>>>>>>> a0dbcdf62e095a1504b8f7a5542a96cdd71f3615
   ],
   methods: ["GET", "POST"],
   credentials: true,
@@ -145,7 +150,11 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
 const upload = multer({
   dest: uploadDir,
+<<<<<<< HEAD
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit
+=======
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+>>>>>>> a0dbcdf62e095a1504b8f7a5542a96cdd71f3615
 });
 
 // -------------------- MP3 edit route --------------------
@@ -181,7 +190,11 @@ app.post("/api/edit", upload.fields([
 
     // ---------------- Telegram foydalanuvchiga yuborish ----------------
     await bot.telegram.sendAudio(
+<<<<<<< HEAD
       telegram_id,
+=======
+      telegram_id, // Faqat shu foydalanuvchiga yuboriladi
+>>>>>>> a0dbcdf62e095a1504b8f7a5542a96cdd71f3615
       { source: fs.createReadStream(outputPath) },
       {
         title: tags.title,
