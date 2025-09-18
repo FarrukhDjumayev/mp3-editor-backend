@@ -8,8 +8,8 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 
 # 4. Dependency'larni o'rnatamiz
-RUN npm install --production
-
+RUN npm install -f
+    
 # 5. Barcha fayllarni ko'chiramiz
 COPY . .
 
