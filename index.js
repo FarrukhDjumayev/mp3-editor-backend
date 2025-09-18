@@ -146,7 +146,19 @@ app.post("/api/edit", upload.fields([
 });
 
 // -------------------- Bot ishga tushishi --------------------
-bot.launch();
+if (process.env.NODE_ENV === "production") {
+  // Render/Webhook rejimi
+  const webhookPath = "/webhook";
+  const webhookUrl = `${process.env.RENDER_EXTERNAL_URL}${webhookPath}`;
+  app.use(bot.webhookCallback(webhookPath));
+  bot.telegram.setWebhook(webhookUrl);
+  console.log("🤖 Bot webhook rejimida ishlamoqda:", webhookUrl);
+} else {
+  // Lokal test uchun polling
+  bot.launch();
+  console.log("🤖 Bot polling rejimida ishlamoqda (lokal)");
+}
+
 process.once("SIGINT", () => bot.stop("SIGINT"));
 process.once("SIGTERM", () => bot.stop("SIGTERM"));
 
