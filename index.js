@@ -15,12 +15,19 @@ const PORT = process.env.PORT || 5000;
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // -------------------- CORS --------------------
+const allowedOrigins = [
+  "https://farrukh-mp3-editor.vercel.app",
+  "http://localhost:3000"
+];
+
 app.use(cors({
-  origin: [
-    "https://farrukh-mp3-editor.vercel.app", // Sizning frontend Vercel URL
-    "http://localhost:3000",                 // Localhost uchun
-    /\.t\.me$/,                              // Telegram Mini App uchun
-  ],
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin) || /\.t\.me$/.test(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error("CORS bloklandi"));
+  },
   methods: ["GET", "POST"],
   credentials: true,
 }));
@@ -46,38 +53,80 @@ app.post("/api/edit", upload.fields([
     const coverFile = req.files["cover"]?.[0];
     const { title, artist, telegram_id } = req.body;
 
-    if (!audioFile) return res.status(400).send("Audio fayl kelmadi!");
-    if (!telegram_id) return res.status(400).send("Telegram ID yo‘q!");
+    if (!audioFile) {
+      return res.status(400).json({ success: false, error: "Audio fayl kelmadi!" });
+    }
 
     const inputPath = path.resolve(audioFile.path);
     const outputPath = path.resolve(uploadDir, `edited-${Date.now()}.mp3`);
 
-    // MP3 faylni qayta ishlash
-    await new Promise((resolve, reject) => {
-      ffmpeg(inputPath)
-        .audioCodec("libmp3lame")
-        .format("mp3")
-        .save(outputPath)
-        .on("end", resolve)
-        .on("error", reject);
-    });
+    // Fayl MP3 bo'lsa konvertatsiya qilmaslik
+    const isMP3 = path.extname(audioFile.originalname).toLowerCase() === ".mp3";
+
+    if (isMP3) {
+      fs.copyFileSync(inputPath, outputPath);
+    } else {
+      await new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+          .audioCodec("libmp3lame")
+          .format("mp3")
+          .save(outputPath)
+          .on("end", resolve)
+          .on("error", reject);
+      });
+    }
 
     // ID3 tag qo'shish
-    const tags = { title: title || "Untitled", artist: artist || "Unknown Artist" };
-    if (coverFile) tags.APIC = coverFile.path;
+    const tags = {
+      title: title || "Untitled",
+      artist: artist || "Unknown Artist",
+    };
+
+    if (coverFile) {
+      tags.APIC = {
+        type: 3,
+        data: fs.readFileSync(coverFile.path),
+        description: "Cover image",
+      };
+    }
+
     NodeID3.update(tags, outputPath);
 
-    // ---------------- Telegram foydalanuvchiga yuborish ----------------
-    await bot.telegram.sendAudio(
-      telegram_id,
-      { source: fs.createReadStream(outputPath) },
-      {
-        title: tags.title,
-        performer: tags.artist,
-      }
-    );
+    // ---------- Telegram Mini App foydalanuvchisi ----------
+    if (telegram_id) {
+      await bot.telegram.sendAudio(
+        telegram_id,
+        { source: fs.createReadStream(outputPath) },
+        {
+          title: tags.title,
+          performer: tags.artist,
+        }
+      );
 
-    res.status(200).json({ message: "Audio tayyor va foydalanuvchiga yuborildi!" });
+      res.status(200).json({ success: true, message: "Audio tayyor va foydalanuvchiga yuborildi!" });
+    } 
+    // ---------- Oddiy sayt foydalanuvchisi ----------
+    else {
+      res.setHeader("Content-Type", "audio/mpeg");
+      res.setHeader("Content-Disposition", `attachment; filename="${tags.title}.mp3"`);
+
+      const fileStream = fs.createReadStream(outputPath);
+      fileStream.pipe(res);
+
+      fileStream.on("close", () => {
+        // Fayllarni tozalash
+        setTimeout(() => {
+          try {
+            if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
+            if (coverFile && fs.existsSync(coverFile.path)) fs.unlinkSync(coverFile.path);
+            if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
+          } catch (err) {
+            console.error("🧹 Tozalashda xato:", err);
+          }
+        }, 10000);
+      });
+      return;
+    }
 
     // Fayllarni tozalash
     setTimeout(() => {
@@ -88,16 +137,19 @@ app.post("/api/edit", upload.fields([
       } catch (err) {
         console.error("🧹 Tozalashda xato:", err);
       }
-    }, 5000);
+    }, 10000);
 
   } catch (err) {
     console.error("🔥 Backend xatolik:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // -------------------- Bot ishga tushishi --------------------
 bot.launch();
+process.once("SIGINT", () => bot.stop("SIGINT"));
+process.once("SIGTERM", () => bot.stop("SIGTERM"));
+
 app.listen(PORT, () => {
   console.log(`✅ Backend http://localhost:${PORT} da ishlamoqda`);
 });
