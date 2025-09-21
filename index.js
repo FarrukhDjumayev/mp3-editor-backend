@@ -17,8 +17,10 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 // -------------------- CORS --------------------
 const allowedOrigins = [
   "https://farrukh-mp3-editor.vercel.app",
+  "https://farrukh-mp3-editor-lmx7euhnf-farrukh-jumayevs-projects.vercel.app",
   "http://localhost:3000"
 ];
+
 
 app.use(cors({
   origin: (origin, callback) => {
